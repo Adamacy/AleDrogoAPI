@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from fastapi import FastAPI, Depends, HTTPException, Response
+from fastapi import FastAPI, Depends, HTTPException, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
@@ -63,8 +63,10 @@ verify = BasicVerifier(
     identifier='general_verifier',
     auto_error=True,
     backend=backend,
-    auth_http_exception=HTTPException(status_code=403, detail="Invalid session")
+    auth_http_exception=HTTPException(
+        status_code=403, detail="Invalid session")
 )
+
 
 def get_db():
     db = SessionLocal()
@@ -96,19 +98,29 @@ PASSWORD = os.getenv("MARIA_PASSWORD")
 USERNAME = os.getenv("MARIA_USERNAME")
 
 
+@app.get("/offers")
+def get_offers(db: Session = Depends(get_db)):
+    return crud.get_items(db = db)
+
+@app.post("/offer/create", response_model=schemas.Item)
+def create_offer(item: schemas.ItemCreate, user_id: int | None = Cookie(default=None), db: Session = Depends(get_db)):
+    print(user_id)
+    return crud.create_user_item(db=db, item=item, user_id=user_id)
+
+
 @app.post("/user/signin")
 async def login_user(user: schemas.UserLogin, response: Response, db: Session = Depends(get_db)):
     db_user = crud.get_user_by_email(db, email=user.email)
     if crud.verify_password(user.password, db_user.password):
-
         session = uuid4()
         data = schemas.SessionData(username=user.email)
         await backend.create(session, data)
         cookie.attach_to_response(response, session)
+        response.set_cookie(key='user_id', value=db_user.id)
         return HTTPException(status_code=200, detail="User loged in")
     else:
         return HTTPException(status_code=401, detail="Incorrect password or email address")
-    
+
 
 @app.post("/user/signup", response_model=schemas.User)
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
