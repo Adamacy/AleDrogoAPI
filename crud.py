@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from passlib.context import CryptContext
 from schemas import UserBase
 import schemas
@@ -5,6 +6,9 @@ import models
 from sqlalchemy.orm import Session
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(password, hashed_password):
+    return pwd_context.verify(password, hashed_password)
 
 def hash_password(password):
     return pwd_context.hash(password)
@@ -22,8 +26,8 @@ def get_users(db: Session, skip: int = 0, limit: int = 100):
 
 
 def create_user(db: Session, user: schemas.UserCreate):
-    fake_hashed_password = hash_password(user.password)
-    db_user = models.User(nickname = user.nickname, fullname = user.fullname, email=user.email, password=fake_hashed_password)
+    hashed_password = hash_password(user.password)
+    db_user = models.User(nickname = user.nickname, fullname = user.fullname, email=user.email, password=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
