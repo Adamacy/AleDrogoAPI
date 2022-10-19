@@ -1,8 +1,8 @@
 from fastapi import HTTPException
 from passlib.context import CryptContext
 from schemas import UserBase
-import schemas
-import models
+import schemas as schemas
+import models as models
 from sqlalchemy.orm import Session
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -33,8 +33,16 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.refresh(db_user)
     return db_user
 
+
+def search_offer(query: str, db: Session, skip: int = 0, limit: int = 10):
+    return db.query(models.Item).filter(models.Item.title.contains(query)).offset(skip).limit(100).all()
+
+def take_one_offer(query: str, db: Session):
+    return db.query(models.Item).filter(models.Item.id == query).all()
+
 def get_items(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Item).offset(skip).limit(limit).all()
+
 
 def create_user_item(db: Session, item: schemas.ItemCreate, user_id: int):
     db_item = models.Item(**item.dict(), owner_id = user_id)

@@ -5,12 +5,13 @@ from dotenv import load_dotenv
 import os
 from sqlalchemy.orm import Session
 from db import Base, SessionLocal, engine
-import crud
-import schemas
-import models
+import crud as crud
+import schemas as schemas
+import models as models
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 from fastapi_sessions.backends.implementations import InMemoryBackend
 from fastapi_sessions.session_verifier import SessionVerifier
+from fastapi.responses import JSONResponse
 load_dotenv()
 
 cookie_params = CookieParameters()
@@ -87,10 +88,13 @@ cookie = SessionCookie(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials = True,
+    allow_origins=[
+        'http://localhost:8080'
+    ],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type","Set-Cookie"],
+    
 )
 
 # MySQL Database
@@ -102,10 +106,16 @@ USERNAME = os.getenv("MARIA_USERNAME")
 def get_offers(db: Session = Depends(get_db)):
     return crud.get_items(db = db)
 
+
 @app.post("/offer/create", response_model=schemas.Item)
 def create_offer(item: schemas.ItemCreate, user_id: int | None = Cookie(default=None), db: Session = Depends(get_db)):
     print(user_id)
     return crud.create_user_item(db=db, item=item, user_id=user_id)
+
+
+@app.get('/offer/search/{query}')
+def search_offer(query: str, db: Session = Depends(get_db)):
+    return crud.search_offer(query = query, db = db)
 
 
 @app.post("/user/signin")
@@ -113,11 +123,10 @@ async def login_user(user: schemas.UserLogin, response: Response, db: Session = 
     db_user = crud.get_user_by_email(db, email=user.email)
     if crud.verify_password(user.password, db_user.password):
         session = uuid4()
-        data = schemas.SessionData(username=user.email)
-        await backend.create(session, data)
-        cookie.attach_to_response(response, session)
-        response.set_cookie(key='user_id', value=db_user.id)
-        return HTTPException(status_code=200, detail="User loged in")
+        response.set_cookie("loginCookie", session, expires=14 * 24 * 60 * 60, httponly=True, secure=True, samesite='none')
+        response.set_cookie(key='user_id', value=db_user.id, httponly=True, secure=True, samesite='none')
+        
+        return HTTPException(200, detail="User loged in")
     else:
         return HTTPException(status_code=401, detail="Incorrect password or email address")
 
@@ -129,3 +138,8 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
     crud.create_user(db=db, user=user)
     return HTTPException(status_code=201, detail="Account created")
+
+
+@app.get("/offer/{query}")
+def get_offer(query: str, db: Session = Depends(get_db)):
+    return crud.take_one_offer(query = query, db = db)
